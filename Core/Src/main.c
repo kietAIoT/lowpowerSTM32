@@ -65,6 +65,7 @@ void EnterStandByRegister();
 void SetAlarm();
 void KIET_reset_rtc_register();
 void KIET_configure_rtc_register();
+void revise();
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -133,9 +134,10 @@ int main(void)
 //  MX_RTC_Init();
   /* USER CODE BEGIN 2 */
 
-//  PinInit();
-//  MuaLed();
+  PinInit();
+  MuaLed();
   RTC_Init();
+
 
   /* USER CODE END 2 */
 
@@ -143,15 +145,30 @@ int main(void)
   /* USER CODE BEGIN WHILE */
   while (1)
   {
+	  //	RTC->DIVH = 0x0000U;
+	  //	RTC->DIVL = 0x8000U;
+//	  	printf("CHEKC POINT 3: %d\n", READ_BIT(RTC->CRL, RTC_CRL_RTOFF));
+//	  	RTC->CNTH = 0x0000U;
+//	  	RTC->CNTL = 0x0000U;
+//
+//	  	RTC->ALRH = 0x0000U;
+//	  	RTC->ALRL = 0x000AU;
+//	  	SET_BIT(RTC->CRH, RTC_CRH_ALRIE);
+//	  	SET_BIT(RTC->CRH, RTC_CRH_ALRIE);
 	printf("RUN MODE\n");
-	HAL_Delay(1000);
-//	MuaLed();
+//	HAL_Delay(1000);
+	MuaLed();
 //	SET_BIT(PWR->CR, PWR_CR_CSBF);
 	SET_BIT(PWR->CR, PWR_CR_CWUF); //Quan trong bit này, vì sau khi nhận được sự kiện wakup thì phải tắt,
 	//Sự kiện WAKUP đo sđi, nếu không nó thấy rằng
 //	SetAlarm();
+	revise();
 	EnterStandBy();
-	HAL_Delay(1000);
+	printf("CHECK RTC_CRL_ALRG %d\n", READ_BIT(RTC->CRL, RTC_CRL_ALRF));
+	printf("CHEKC RTC_DIVL: %d\n", RTC->DIVL);
+	printf("CHEKC RTC_CNTL: %d\n", RTC->CNTL);
+	printf("CHEKC RTC_ANRL: %d\n", RTC->ALRL);
+	HAL_Delay(200);
 
 
 		//	HAL_Delay(100);
@@ -431,15 +448,17 @@ void EnterStandBy() {
 //	SETBIT(PWR->CR, PWR_CR_CSBF);
 //}
 
-//void SetAlarm() {
-//	RTC_AlarmTypeDef a;
-//	a.Alarm = RTC_ALARM_A;
-//	a.AlarmTime.Hours = 0x00;
-//	a.AlarmTime.Minutes = 0;
-//	a.AlarmTime.Seconds = 10;
-//	hrtc.Instance = RTC;
-//	HAL_RTC_SetAlarm(&hrtc, &a, RTC_FORMAT_BIN);
-//}
+void SetAlarm() {
+	RTC_AlarmTypeDef a;
+	a.Alarm = RTC_ALARM_A;
+	a.AlarmTime.Hours = 0x00;
+	a.AlarmTime.Minutes = 0;
+	a.AlarmTime.Seconds = 10;
+	hrtc.Instance = RTC;
+	HAL_RTC_SetAlarm(&hrtc, &a, RTC_FORMAT_BIN);
+}
+
+
 
 void RTC_Init(){
 	/** @note */
@@ -453,6 +472,7 @@ void RTC_Init(){
 	 * 0: Backup interface clock disabled
 	 * 1: Backup interface clock enabled*/
 	SET_BIT(RCC->APB1ENR, RCC_APB1ENR_BKPEN);
+
 	/* Bit 8 DBP: Disable backup domain write protection.
 	 * In reset state, the RTC and backup registers are protected against parasitic write access.
 	 * This bit must be set to enable write access to these registers.
@@ -533,17 +553,19 @@ void KIET_configure_rtc_register() {
 	SET_BIT(RTC->CRL, RTC_CRL_CNF);
 	printf("CHEKC POINT 1: %d\n", READ_BIT(RTC->CRL, RTC_CRL_RTOFF));
 	/*Begin for writing to RTC Register - Write one or more RTC register*/
-//	RTC->PRLH = 0U;
+	RTC->PRLH = 0U;
 	RTC->PRLL = 0x7FFFU;
 	printf("CHEKC POINT 2: %d\n", READ_BIT(RTC->CRL, RTC_CRL_RTOFF));
-	RTC->DIVH = 0x0000U;
-	RTC->DIVL = 0x8000U;
+//	RTC->DIVH = 0x0000U;
+//	RTC->DIVL = 0x8000U;
 	printf("CHEKC POINT 3: %d\n", READ_BIT(RTC->CRL, RTC_CRL_RTOFF));
-//	RTC->CNTH = 0x0000U;
-//	RTC->CNTL = 0x0000U;
-//
-//	RTC->ALRH = 0x0000U;
-//	RTC->ALRL = 0x000AU;
+	RTC->CNTH = 0x0000U;
+	RTC->CNTL = 0x0000U;
+
+	RTC->ALRH = 0x0000U;
+	RTC->ALRL = 0x0004U;
+	SET_BIT(RTC->CRH, RTC_CRH_ALRIE);
+	SET_BIT(RTC->CRH, RTC_CRH_ALRIE);
 	/* During each period of TR_CLK, the counter inside the RTC prescaler is reloaded with the
 	 * value stored in the RTC_PRL register. To get an accurate time measurement it is possible to
 	 * read the current value of the prescaler counter, stored in the RTC_DIV register, without
@@ -563,6 +585,48 @@ void KIET_configure_rtc_register() {
 
 }
 
+
+void revise() {
+	/* To write in the RTC_PRL, RTC_CNT, RTC_ALR registers, the peripheral must enter
+		 * Configuration mode. This is done by setting the CNF bit in the RTC_CRL register
+		 * In addition, writing to any RTC register is only enabled if the previous write operation is finished.
+		 * To enable the software to detect this situation, the RTOFF status bit is provided in
+		 * the RTC_CR register to indicate that an update of the registers is in progress. A new value
+		 * can be written to the RTC registers only when the RTOFF status bit value is ’1’*/
+		/* 1. Poll RTOFF, wait until its value goes to ‘1
+		 * 2. Set the CNF bit to enter configuration mode
+		 * 3. Write to one or more RTC registers
+		 * 4. Clear the CNF bit to exit configuration mode
+		 * 5. Poll RTOFF, wait until its value goes to ‘1’ to check the end of the write operation*/
+		while (READ_BIT(RTC->CRL, RTC_CRL_RTOFF)==0) {printf("HAL_L1_Check RTOFF\n");}
+		/* Bit 4 CNF: Configuration flag
+		 * This bit must be set by software to enter in configuration mode so as to allow new values to
+		 * be written in the RTC_CNT, RTC_ALR or RTC_PRL registers. The write operation is only
+		 * executed when the CNF bit is reset by software after has been set.
+		 * 0: Exit configuration mode (start update of RTC registers).
+		 * 1: Enter configuration mode.*/
+		SET_BIT(RTC->CRL, RTC_CRL_CNF);
+		/*Begin for writing to RTC Register - Write one or more RTC register*/
+	//	RTC->DIVH = 0x0000U;
+	//	RTC->DIVL = 0x8000U;
+		RTC->CNTH = 0x0000U;
+		RTC->CNTL = 0x0000U;
+
+		/* During each period of TR_CLK, the counter inside the RTC prescaler is reloaded with the
+		 * value stored in the RTC_PRL register. To get an accurate time measurement it is possible to
+		 * read the current value of the prescaler counter, stored in the RTC_DIV register, without
+		 * stopping it. This register is read-only and it is reloaded by hardware after any change in the
+		 * RTC_PRL or RTC_CNT registers.*/
+
+		/*End of writing to RTC register*/
+		CLEAR_BIT(RTC->CRL, RTC_CRL_CNF);
+		/* Bit 5 RTOFF: RTC operation OFF With this bit the RTC reports the status of the last write operation performed on its registers,
+		 * indicating if it has been completed or not. If its value is ‘0’ then it is not possible to write to any
+		 * of the RTC registers. This bit is read only.
+		 * 0: Last write operation on RTC registers is still ongoing.
+		 * 1: Last write operation on RTC registers terminated.*/
+		while (READ_BIT(RTC->CRL, RTC_CRL_RTOFF)==0) {printf("HAL_L2_Ongoing in other command\n %d",READ_BIT(RTC->CRL, RTC_CRL_RTOFF) );}
+}
 void KIET_reset_rtc_register() {
 	/* All system registers are asynchronously reset by a System Reset or Power Reset, except*/
 	/* for RTC_PRL, RTC_ALR, RTC_CNT, and RTC_DIV.
@@ -574,6 +638,98 @@ void KIET_reset_rtc_register() {
 	HAL_Delay(1);
 	CLEAR_BIT(RCC->BDCR, RCC_BDCR_BDRST);
 }
+
+
+//HAL_StatusTypeDef HAL_RTC_SetAlarm_IT(RTC_HandleTypeDef *hrtc, RTC_AlarmTypeDef *sAlarm, uint32_t Format)
+//{
+//  uint32_t counter_alarm = 0U, counter_time;
+//  RTC_TimeTypeDef stime = {0U};
+//
+//  /* Check input parameters */
+//  if ((hrtc == NULL) || (sAlarm == NULL))
+//  {
+//    return HAL_ERROR;
+//  }
+//
+//  /* Check the parameters */
+//  assert_param(IS_RTC_FORMAT(Format));
+//  assert_param(IS_RTC_ALARM(sAlarm->Alarm));
+//
+//  /* Process Locked */
+//  __HAL_LOCK(hrtc);
+//
+//  hrtc->State = HAL_RTC_STATE_BUSY;
+//
+//  /* Call HAL_RTC_GetTime function to update date if counter higher than 24 hours */
+//  if (HAL_RTC_GetTime(hrtc, &stime, RTC_FORMAT_BIN) != HAL_OK)
+//  {
+//    return HAL_ERROR;
+//  }
+//
+//  /* Convert time in seconds */
+//  counter_time = (uint32_t)(((uint32_t)stime.Hours * 3600U) + \
+//                            ((uint32_t)stime.Minutes * 60U) + \
+//                            ((uint32_t)stime.Seconds));
+//
+//  if (Format == RTC_FORMAT_BIN)
+//  {
+//    assert_param(IS_RTC_HOUR24(sAlarm->AlarmTime.Hours));
+//    assert_param(IS_RTC_MINUTES(sAlarm->AlarmTime.Minutes));
+//    assert_param(IS_RTC_SECONDS(sAlarm->AlarmTime.Seconds));
+//
+//    counter_alarm = (uint32_t)(((uint32_t)sAlarm->AlarmTime.Hours * 3600U) + \
+//                               ((uint32_t)sAlarm->AlarmTime.Minutes * 60U) + \
+//                               ((uint32_t)sAlarm->AlarmTime.Seconds));
+//  }
+//  else
+//  {
+//    assert_param(IS_RTC_HOUR24(RTC_Bcd2ToByte(sAlarm->AlarmTime.Hours)));
+//    assert_param(IS_RTC_MINUTES(RTC_Bcd2ToByte(sAlarm->AlarmTime.Minutes)));
+//    assert_param(IS_RTC_SECONDS(RTC_Bcd2ToByte(sAlarm->AlarmTime.Seconds)));
+//
+//    counter_alarm = (((uint32_t)(RTC_Bcd2ToByte(sAlarm->AlarmTime.Hours)) * 3600U) + \
+//                     ((uint32_t)(RTC_Bcd2ToByte(sAlarm->AlarmTime.Minutes)) * 60U) + \
+//                     ((uint32_t)RTC_Bcd2ToByte(sAlarm->AlarmTime.Seconds)));
+//  }
+//
+//  /* Check that requested alarm should expire in the same day (otherwise add 1 day) */
+//  if (counter_alarm < counter_time)
+//  {
+//    /* Add 1 day to alarm counter*/
+//    counter_alarm += (uint32_t)(24U * 3600U);
+//  }
+//
+//  /* Write alarm counter in RTC registers */
+//  if (RTC_WriteAlarmCounter(hrtc, counter_alarm) != HAL_OK)
+//  {
+//    /* Set RTC state */
+//    hrtc->State = HAL_RTC_STATE_ERROR;
+//
+//    /* Process Unlocked */
+//    __HAL_UNLOCK(hrtc);
+//
+//    return HAL_ERROR;
+//  }
+//  else
+//  {
+//    /* Clear flag alarm A */
+//    __HAL_RTC_ALARM_CLEAR_FLAG(hrtc, RTC_FLAG_ALRAF);
+//
+//    /* Configure the Alarm interrupt */
+//    __HAL_RTC_ALARM_ENABLE_IT(hrtc, RTC_IT_ALRA);
+//
+//    /* RTC Alarm Interrupt Configuration: EXTI configuration */
+//    __HAL_RTC_ALARM_EXTI_ENABLE_IT();
+//
+//    __HAL_RTC_ALARM_EXTI_ENABLE_RISING_EDGE();
+//
+//    hrtc->State = HAL_RTC_STATE_READY;
+//
+//    __HAL_UNLOCK(hrtc);
+//
+//    return HAL_OK;
+//  }
+//}
 
 /* USER CODE END 4 */
 
